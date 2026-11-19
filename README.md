@@ -20,9 +20,9 @@ Pulsa **Esc** para cerrar el juego.
 
 - **W, A, S, D:** mover al robot.
 - **Espacio:** dejar una bomba. Se permiten hasta dos cargas; cada bomba detona a los 2,5 segundos.
+- **T:** con el guante, recoger la bomba que esté delante del robot; pulsa **T** de nuevo para lanzarla hasta dos casillas en la dirección hacia la que mira.
 - **P:** pausar o continuar.
 - Tras perder las tres vidas, **Enter** o **R** reinicia; **X** sale.
-- Al recoger el guante, mantén una dirección y pulsa **Espacio** para lanzar la bomba hasta dos casillas.
 
 ## Reglas
 
@@ -32,11 +32,10 @@ El guante y el potenciador azul aparecen ocultos bajo ladrillos del primer nivel
 
 ## Archivos
 
-- `GameForm.cs`: tablero matricial, movimiento, bombas, enemigos, niveles y dibujo.
+- `Form1.cs`: ventana principal; reúne el tablero matricial, los gráficos, el movimiento, las bombas, los enemigos y los niveles.
 - `Assets/robot.png`: personaje recortado de la imagen adjunta.
 - El mapa adjunto está reconstruido en la matriz del nivel 1. `floor.png`, `steel.png` y `brick.png` contienen sus texturas de casilla.
 - `Assets/bomb.jpg`: imagen de bomba adjunta, mostrada al detonar.
-
 
 
 

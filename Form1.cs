@@ -3,7 +3,7 @@ using System.Drawing.Text;
 
 namespace BomberMan;
 
-public sealed class GameForm : Form
+public sealed class Form1 : Form
 {
     private enum Cell { Floor, Steel, Brick, HiddenGlove, HiddenPlus, Glove, Plus }
     private sealed class Bomb(int x, int y, DateTime placed)
@@ -30,6 +30,8 @@ public sealed class GameForm : Form
     private Image? floorTile, steelTile, brickTile;
     private int level = 1, lives = 3, bombCharges = 2, cols, rows;
     private float px = 1, py = 1;
+    private int facingX = 1, facingY;
+    private Bomb? heldBomb;
     private bool glove, paused, gameOver, victory;
     private DateTime chargeAt = DateTime.UtcNow, flameUntil;
     private DateTime invulnerableUntil;
@@ -37,7 +39,7 @@ public sealed class GameForm : Form
     private DateTime bannerUntil;
     private const int HudHeight = 82;
 
-    public GameForm()
+    public Form1()
     {
         Text = "Bomber Man — Robot del Laberinto";
         BackColor = Color.FromArgb(9, 14, 25);
@@ -74,10 +76,11 @@ public sealed class GameForm : Form
             return;
         }
         if (e.KeyCode == Keys.Space && !paused) { PlaceBomb(); e.Handled = true; return; }
+        if (e.KeyCode == Keys.T && !paused && !held.Contains(Keys.T)) { held.Add(Keys.T); InteractWithBomb(); e.Handled = true; return; }
         held.Add(e.KeyCode);
     }
 
-    private void Restart() { lives = 3; glove = false; gameOver = victory = paused = false; StartLevel(1); }
+    private void Restart() { lives = 3; glove = false; heldBomb = null; gameOver = victory = paused = false; StartLevel(1); }
 
     private void StartLevel(int n)
     {
@@ -86,6 +89,7 @@ public sealed class GameForm : Form
         cols = rows = size;
         map = new Cell[rows, cols];
         bombs.Clear(); monsters.Clear(); flames.Clear();
+        heldBomb = null;
         px = py = 1; bombCharges = 2; chargeAt = DateTime.UtcNow;
         var rng = new Random(215 + n * 89);
         string[] firstMap = [
@@ -144,6 +148,8 @@ public sealed class GameForm : Form
         if (dx != 0 || dy != 0)
         {
             float len = MathF.Sqrt(dx * dx + dy * dy); dx /= len; dy /= len;
+            if (Math.Abs(dx) >= Math.Abs(dy)) { facingX = Math.Sign(dx); facingY = 0; }
+            else { facingX = 0; facingY = Math.Sign(dy); }
             float speed = 3.7f * timer.Interval / 1000f;
             TryMovePlayer(px + dx * speed, py);
             TryMovePlayer(px, py + dy * speed);
@@ -192,17 +198,33 @@ public sealed class GameForm : Form
         if (bombs.Any(b => b.X == x && b.Y == y)) return;
         var bomb = new Bomb(x, y, DateTime.UtcNow); bombs.Add(bomb); bombCharges--;
         if (bombCharges == 1) chargeAt = DateTime.UtcNow;
-        if (glove)
+        // Space plants a bomb; the glove interaction uses T to pick up or throw it.
+    }
+
+    private void InteractWithBomb()
+    {
+        if (!glove) { ShowBanner("Encuentra el guante para recoger y lanzar bombas"); return; }
+        if (heldBomb != null)
         {
-            var key = held.FirstOrDefault(k => k is Keys.A or Keys.D or Keys.W or Keys.S);
-            var (dx, dy) = key switch { Keys.A => (-1,0), Keys.D => (1,0), Keys.W => (0,-1), Keys.S => (0,1), _ => (0,0) };
-            for (int step = 1; step <= 2 && (dx != 0 || dy != 0); step++)
+            int x = (int)MathF.Round(px), y = (int)MathF.Round(py), targetX = x, targetY = y;
+            for (int step = 1; step <= 2; step++)
             {
-                int nx = x + dx * step, ny = y + dy * step;
+                int nx = x + facingX * step, ny = y + facingY * step;
                 if (!InBounds(nx, ny) || map[ny, nx] is Cell.Steel or Cell.Brick or Cell.HiddenGlove or Cell.HiddenPlus || bombs.Any(b => b.X == nx && b.Y == ny)) break;
-                bomb.X = nx; bomb.Y = ny;
+                targetX = nx; targetY = ny;
             }
+            if (targetX == x && targetY == y) { ShowBanner("No hay espacio libre para lanzar la bomba"); return; }
+            heldBomb.X = targetX; heldBomb.Y = targetY; heldBomb.Placed = DateTime.UtcNow;
+            heldBomb.Exploding = false; bombs.Add(heldBomb); heldBomb = null;
+            ShowBanner("¡Bomba lanzada!");
+            return;
         }
+        int bx = (int)MathF.Round(px) + facingX, by = (int)MathF.Round(py) + facingY;
+        var target = bombs.FirstOrDefault(b => !b.Exploding && b.X == bx && b.Y == by);
+        if (target == null) { ShowBanner("Acércate a una bomba y pulsa T para recogerla"); return; }
+        bombs.Remove(target); heldBomb = target;
+        bombCharges = Math.Min(2, bombCharges + 1);
+        ShowBanner("Bomba recogida · pulsa T para lanzarla");
     }
 
     private void Explode(Bomb b, DateTime now)
@@ -270,6 +292,7 @@ public sealed class GameForm : Form
         }
         foreach (var m in monsters) DrawMonster(g, ox + m.X * tile, oy + m.Y * tile, tile);
         DrawHero(g, ox + px * tile, oy + py * tile, tile);
+        if (heldBomb != null) DrawBomb(g, (int)(ox + px * tile + tile * .23f), (int)(oy + py * tile - tile * .3f), Math.Max(16, tile / 2));
         if (DateTime.UtcNow < bannerUntil) DrawBanner(g, banner);
         if (paused) DrawOverlay(g, "PAUSA", "Pulsa P para continuar");
         if (gameOver) DrawOverlay(g, "FIN DEL JUEGO", "ENTER / R  Reiniciar       X  Salir");
