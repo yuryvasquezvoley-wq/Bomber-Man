@@ -16,7 +16,6 @@ public sealed class Form1 : Form
     private sealed class Monster(int x, int y)
     {
         public float X = x, Y = y;
-        public float FromX = x, FromY = y, ToX = x, ToY = y;
         public DateTime MoveAt = DateTime.UtcNow;
     }
 
@@ -32,6 +31,11 @@ public sealed class Form1 : Form
     private Image? floorTile, steelTile, brickTile;
     private int level = 1, lives = 3, bombCharges = 2, cols, rows;
     private float px = 1, py = 1;
+    private int playerCellX = 1, playerCellY = 1;
+    private float walkFromX = 1, walkFromY = 1;
+    private int walkToX = 1, walkToY = 1;
+    private bool playerWalking;
+    private DateTime walkStarted, nextPlayerStepAt;
     private int facingX = 1, facingY;
     private Bomb? heldBomb;
     private bool glove, paused, gameOver, victory;
@@ -94,7 +98,8 @@ public sealed class Form1 : Form
         map = new Cell[rows, cols];
         bombs.Clear(); monsters.Clear(); flames.Clear(); monsterFlames.Clear(); monsterBlastCenters.Clear();
         heldBomb = null;
-        px = py = 1; bombCharges = 2; chargeAt = DateTime.UtcNow;
+        px = py = 1; playerCellX = playerCellY = 1; playerWalking = false; facingX = 1; facingY = 0;
+        bombCharges = 2; chargeAt = DateTime.UtcNow; nextPlayerStepAt = DateTime.MinValue;
         var rng = new Random(215 + n * 89);
         string[] firstMap = [
             "SSSSSSSSSSSSSSSSSS", "SBB...B..BB....BBS", "SBS.S.SS.SBS.SBSBS", "S..BB..B..BB.....S",
@@ -145,18 +150,7 @@ public sealed class Form1 : Form
         var now = DateTime.UtcNow;
         if (now >= flameUntil) { flames.Clear(); monsterFlames.Clear(); monsterBlastCenters.Clear(); }
         if (bombCharges < 2 && (now - chargeAt).TotalSeconds >= 2.5) { bombCharges++; chargeAt = now; }
-        float dx = 0, dy = 0;
-        if (held.Contains(Keys.A)) dx--; if (held.Contains(Keys.D)) dx++;
-        if (held.Contains(Keys.W)) dy--; if (held.Contains(Keys.S)) dy++;
-        if (dx != 0 || dy != 0)
-        {
-            float len = MathF.Sqrt(dx * dx + dy * dy); dx /= len; dy /= len;
-            if (Math.Abs(dx) >= Math.Abs(dy)) { facingX = Math.Sign(dx); facingY = 0; }
-            else { facingX = 0; facingY = Math.Sign(dy); }
-            float speed = 3.7f * timer.Interval / 1000f;
-            TryMovePlayer(px + dx * speed, py);
-            TryMovePlayer(px, py + dy * speed);
-        }
+        AdvancePlayer(now);
         for (int i = bombs.Count - 1; i >= 0; i--)
         {
             var b = bombs[i];
@@ -166,7 +160,7 @@ public sealed class Form1 : Form
         for (int i = monsters.Count - 1; i >= 0; i--)
         {
             var m = monsters[i];
-            if (Math.Abs(px - m.X) + Math.Abs(py - m.Y) <= 1f)
+            if (Math.Abs(playerCellX - m.X) + Math.Abs(playerCellY - m.Y) <= 1f)
             {
                 ExplodeMonster(m, now);
                 monsters.RemoveAt(i);
@@ -174,27 +168,42 @@ public sealed class Form1 : Form
                 continue;
             }
             if (now < m.MoveAt) continue;
-            m.X = m.ToX; m.Y = m.ToY;
             var dirs = new[] { (1,0),(-1,0),(0,1),(0,-1) }.OrderBy(_ => Random.Shared.Next()).ToArray();
             foreach (var (ax, ay) in dirs)
             {
                 int nx = (int)m.X + ax, ny = (int)m.Y + ay;
-                if (CanMonsterEnter(nx, ny)) { m.FromX = m.X; m.FromY = m.Y; m.ToX = nx; m.ToY = ny; m.MoveAt = now.AddMilliseconds(340 + Random.Shared.Next(250)); break; }
+                if (CanMonsterEnter(nx, ny)) { m.X = nx; m.Y = ny; m.MoveAt = now.AddMilliseconds(340 + Random.Shared.Next(250)); break; }
             }
-            float t = 1 - Math.Clamp((float)(m.MoveAt - now).TotalMilliseconds / 340f, 0, 1);
-            m.X = m.FromX + (m.ToX - m.FromX) * t; m.Y = m.FromY + (m.ToY - m.FromY) * t;
+            if (m.MoveAt <= now) m.MoveAt = now.AddMilliseconds(340);
         }
         if (monsters.Count == 0) { if (level < 3) StartLevel(level + 1); else victory = true; }
     }
 
     private bool CanMonsterEnter(int x, int y) => InBounds(x, y) && map[y, x] is Cell.Floor or Cell.Glove or Cell.Plus && !bombs.Any(b => b.X == x && b.Y == y) && !flames.Contains((x, y));
-    private void TryMovePlayer(float x, float y)
+    private void AdvancePlayer(DateTime now)
     {
-        if (!CanPlayerEnter((int)MathF.Round(x), (int)MathF.Round(y))) return;
-        px = x; py = y;
-        int cx = (int)MathF.Round(px), cy = (int)MathF.Round(py);
-        if (map[cy, cx] == Cell.Glove) { glove = true; map[cy, cx] = Cell.Floor; ShowBanner("¡GUANTE! Ahora puedes lanzar bombas"); }
-        if (map[cy, cx] == Cell.Plus) { bombCharges = Math.Min(2, bombCharges + 1); map[cy, cx] = Cell.Floor; ShowBanner("¡POTENCIADOR! Cargas de bomba recuperadas"); }
+        if (playerWalking)
+        {
+            float t = Math.Clamp((float)(now - walkStarted).TotalMilliseconds / 125f, 0f, 1f);
+            px = walkFromX + (walkToX - walkFromX) * t;
+            py = walkFromY + (walkToY - walkFromY) * t;
+            if (t >= 1f) { playerWalking = false; px = walkToX; py = walkToY; }
+        }
+        if (playerWalking || now < nextPlayerStepAt) return;
+        int dx = 0, dy = 0;
+        if (held.Contains(Keys.W)) dy = -1;
+        else if (held.Contains(Keys.A)) dx = -1;
+        else if (held.Contains(Keys.S)) dy = 1;
+        else if (held.Contains(Keys.D)) dx = 1;
+        else return;
+        nextPlayerStepAt = now.AddMilliseconds(135);
+        int targetX = playerCellX + dx, targetY = playerCellY + dy;
+        if (!CanPlayerEnter(targetX, targetY)) return;
+        facingX = dx; facingY = dy;
+        walkFromX = px; walkFromY = py; walkToX = targetX; walkToY = targetY; walkStarted = now; playerWalking = true;
+        playerCellX = targetX; playerCellY = targetY;
+        if (map[targetY, targetX] == Cell.Glove) { glove = true; map[targetY, targetX] = Cell.Floor; ShowBanner("¡GUANTE! Ahora puedes recoger y lanzar bombas con T"); }
+        if (map[targetY, targetX] == Cell.Plus) { bombCharges = Math.Min(2, bombCharges + 1); map[targetY, targetX] = Cell.Floor; ShowBanner("¡POTENCIADOR! Cargas de bomba recuperadas"); }
     }
     private bool CanPlayerEnter(int x, int y) => InBounds(x, y) && map[y, x] is Cell.Floor or Cell.Glove or Cell.Plus && !bombs.Any(b => b.X == x && b.Y == y);
     private bool InBounds(int x, int y) => x >= 0 && y >= 0 && x < cols && y < rows;
@@ -202,7 +211,7 @@ public sealed class Form1 : Form
     private void PlaceBomb()
     {
         if (bombCharges <= 0) { ShowBanner("Espera para recuperar una bomba"); return; }
-        int x = (int)MathF.Round(px) + facingX, y = (int)MathF.Round(py) + facingY;
+        int x = playerCellX + facingX, y = playerCellY + facingY;
         if (!InBounds(x, y) || map[y, x] is Cell.Steel or Cell.Brick or Cell.HiddenGlove or Cell.HiddenPlus or Cell.Glove or Cell.Plus)
         { ShowBanner("No puedes poner una bomba en ese bloque"); return; }
         if (bombs.Any(b => b.X == x && b.Y == y)) return;
@@ -216,7 +225,7 @@ public sealed class Form1 : Form
         if (!glove) { ShowBanner("Encuentra el guante para recoger y lanzar bombas"); return; }
         if (heldBomb != null)
         {
-            int x = (int)MathF.Round(px), y = (int)MathF.Round(py), targetX = x, targetY = y;
+            int x = playerCellX, y = playerCellY, targetX = x, targetY = y;
             for (int step = 1; step <= 2; step++)
             {
                 int nx = x + facingX * step, ny = y + facingY * step;
@@ -229,7 +238,7 @@ public sealed class Form1 : Form
             ShowBanner("¡Bomba lanzada!");
             return;
         }
-        int bx = (int)MathF.Round(px) + facingX, by = (int)MathF.Round(py) + facingY;
+        int bx = playerCellX + facingX, by = playerCellY + facingY;
         var target = bombs.FirstOrDefault(b => !b.Exploding && b.X == bx && b.Y == by);
         if (target == null) { ShowBanner("Acércate a una bomba y pulsa T para recogerla"); return; }
         bombs.Remove(target); heldBomb = target;
@@ -256,7 +265,7 @@ public sealed class Form1 : Form
         foreach (var cell in affected) flames.Add(cell);
         if (now.AddMilliseconds(430) > flameUntil) flameUntil = now.AddMilliseconds(430);
         monsters.RemoveAll(m => affected.Any(c => (int)MathF.Round(m.X) == c.x && (int)MathF.Round(m.Y) == c.y));
-        if (affected.Any(c => c.x == (int)MathF.Round(px) && c.y == (int)MathF.Round(py))) LoseLife();
+        if (affected.Any(c => c.x == playerCellX && c.y == playerCellY)) LoseLife();
     }
 
     private void ExplodeMonster(Monster monster, DateTime now)
@@ -274,13 +283,13 @@ public sealed class Form1 : Form
         foreach (var cell in affected) { flames.Add(cell); monsterFlames.Add(cell); }
         monsterBlastCenters[(mx, my)] = now.AddMilliseconds(550);
         if (now.AddMilliseconds(550) > flameUntil) flameUntil = now.AddMilliseconds(550);
-        if (affected.Any(c => c.x == (int)MathF.Round(px) && c.y == (int)MathF.Round(py))) LoseLife();
+        if (affected.Any(c => c.x == playerCellX && c.y == playerCellY)) LoseLife();
     }
     private void LoseLife()
     {
         if (DateTime.UtcNow < invulnerableUntil) return;
         lives--; invulnerableUntil = DateTime.UtcNow.AddSeconds(1.4); if (lives <= 0) { gameOver = true; return; }
-        px = py = 1; bombs.RemoveAll(b => b.X == 1 && b.Y == 1); ShowBanner($"¡Cuidado! Vidas: {lives}");
+        px = py = 1; playerCellX = playerCellY = 1; playerWalking = false; bombs.RemoveAll(b => b.X == 1 && b.Y == 1); ShowBanner($"¡Cuidado! Vidas: {lives}");
     }
     private void ShowBanner(string text) { banner = text; bannerUntil = DateTime.UtcNow.AddSeconds(1.7); }
 

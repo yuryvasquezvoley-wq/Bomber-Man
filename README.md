@@ -18,7 +18,7 @@ Pulsa **Esc** para cerrar el juego.
 
 ## Controles
 
-- **W, A, S, D:** mover al robot.
+- **W, A, S, D:** avanzar una casilla por vez. El personaje solo entra a una casilla libre de la matriz y gira hacia la última dirección válida.
 - **Espacio:** dejar una bomba en la casilla libre delante del personaje. Se permiten hasta dos cargas; cada bomba detona a los 2,5 segundos.
 - **T:** con el guante, recoger la bomba que esté delante del robot; pulsa **T** de nuevo para lanzarla hasta dos casillas en la dirección hacia la que mira.
 - **P:** pausar o continuar.
@@ -26,7 +26,7 @@ Pulsa **Esc** para cerrar el juego.
 
 ## Reglas
 
-Los bloques de acero no se pueden cruzar ni destruir. Los ladrillos se dibujan como bloques completos y se destruyen con la explosión, cuyo alcance es de una casilla en cada dirección. El robot también recibe daño de sus propias bombas. Hay tres monstruos por nivel: recorren el laberinto, respetan paredes y bombas, y explotan en un área de una casilla cuando se acercan al personaje. El mapa se amplía en cada nivel; al eliminar los tres monstruos se avanza al siguiente.
+Los bloques de acero no se pueden cruzar ni destruir. Los ladrillos se dibujan como bloques completos y se destruyen con la explosión, cuyo alcance es de una casilla en cada dirección. El robot también recibe daño de sus propias bombas. Hay tres monstruos por nivel: avanzan casilla por casilla, respetan paredes y bombas, y explotan en un área de una casilla cuando se acercan al personaje. El mapa se amplía en cada nivel; al eliminar los tres monstruos se avanza al siguiente.
 
 El guante y el potenciador azul aparecen ocultos bajo ladrillos del primer nivel. El potenciador recupera una carga de bomba.
 
