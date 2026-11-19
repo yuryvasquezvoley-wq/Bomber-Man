@@ -202,8 +202,19 @@ public sealed class Form1 : Form
         facingX = dx; facingY = dy;
         walkFromX = px; walkFromY = py; walkToX = targetX; walkToY = targetY; walkStarted = now; playerWalking = true;
         playerCellX = targetX; playerCellY = targetY;
-        if (map[targetY, targetX] == Cell.Glove) { glove = true; map[targetY, targetX] = Cell.Floor; ShowBanner("¡GUANTE! Ahora puedes recoger y lanzar bombas con T"); }
-        if (map[targetY, targetX] == Cell.Plus) { bombCharges = Math.Min(2, bombCharges + 1); map[targetY, targetX] = Cell.Floor; ShowBanner("¡POTENCIADOR! Cargas de bomba recuperadas"); }
+        if (map[targetY, targetX] == Cell.Glove)
+        {
+            bombCharges = Math.Min(2, bombCharges + 1);
+            map[targetY, targetX] = Cell.Floor;
+            ShowBanner("¡GUANTE! Recuperaste una carga; encuentra el plus para lanzar bombas");
+        }
+        if (map[targetY, targetX] == Cell.Plus)
+        {
+            bombCharges = Math.Min(2, bombCharges + 1);
+            glove = true;
+            map[targetY, targetX] = Cell.Floor;
+            ShowBanner("¡PLUS! Ya puedes recoger y lanzar bombas con T");
+        }
     }
     private bool CanPlayerEnter(int x, int y) => InBounds(x, y) && map[y, x] is Cell.Floor or Cell.Glove or Cell.Plus && !bombs.Any(b => b.X == x && b.Y == y);
     private bool InBounds(int x, int y) => x >= 0 && y >= 0 && x < cols && y < rows;
@@ -354,7 +365,7 @@ public sealed class Form1 : Form
         g.DrawString($"NIVEL  {level} / 3", infoFont, white, 31, 49);
         g.DrawString($"VIDAS  {new string('♥', lives)}", infoFont, new SolidBrush(Color.FromArgb(255, 92, 118)), 195, 49);
         g.DrawString($"BOMBAS  {bombCharges}/2", infoFont, white, 350, 49);
-        g.DrawString(glove ? "GUANTE · T RECOGE / LANZA · ESPACIO BOMBA AL FRENTE" : "W A S D MOVER · ESPACIO BOMBA AL FRENTE · P PAUSA", infoFont, muted, 535, 49);
+        g.DrawString(glove ? "PLUS · T RECOGE / LANZA · ESPACIO BOMBA BAJO EL ROBOT" : "W A S D MOVER · ESPACIO BOMBA BAJO EL ROBOT · P PAUSA", infoFont, muted, 535, 49);
     }
     private void DrawBrickEdges(Graphics g, int x, int y, int s)
     {
@@ -400,6 +411,7 @@ public sealed class Form1 : Form
     }
     private void DrawHero(Graphics g, float cx, float cy, int s)
     {
+        if (heldBomb != null) { DrawHeroHoldingBomb(g, cx, cy, s); return; }
         int d = (int)(s * .86f); var r = new Rectangle((int)(cx - d / 2f), (int)(cy - d / 2f), d, d);
         if (hero != null)
         {
@@ -407,6 +419,24 @@ public sealed class Form1 : Form
             g.DrawImage(hero, r);
         }
         else { using var b = new SolidBrush(Color.Cyan); g.FillEllipse(b, r); }
+    }
+    private void DrawHeroHoldingBomb(Graphics g, float cx, float cy, int s)
+    {
+        if (DateTime.UtcNow < invulnerableUntil && DateTime.UtcNow.Millisecond / 100 % 2 == 0) return;
+        using var arm = new Pen(Color.FromArgb(42, 162, 229), Math.Max(3, s / 13f));
+        using var hand = new SolidBrush(Color.FromArgb(91, 220, 246));
+        int bodySize = (int)(s * .72f);
+        var body = new Rectangle((int)(cx - bodySize / 2f), (int)(cy - bodySize / 2f + s * .12f), bodySize, bodySize);
+        float shoulderY = cy - s * .02f, handY = cy - s * .39f;
+        g.DrawLine(arm, cx - s * .19f, shoulderY, cx - s * .16f, handY);
+        g.DrawLine(arm, cx + s * .19f, shoulderY, cx + s * .16f, handY);
+        if (hero != null) g.DrawImage(hero, body);
+        else { using var fallback = new SolidBrush(Color.Cyan); g.FillEllipse(fallback, body); }
+        int handSize = Math.Max(4, s / 9);
+        g.FillRectangle(hand, cx - s * .2f, handY - handSize / 2f, handSize, handSize);
+        g.FillRectangle(hand, cx + s * .2f - handSize, handY - handSize / 2f, handSize, handSize);
+        int bombSize = Math.Max(16, (int)(s * .38f));
+        DrawBomb(g, (int)(cx - bombSize / 2f), (int)(cy - s * .68f), bombSize);
     }
     private void DrawMonster(Graphics g, float cx, float cy, int s)
     {
