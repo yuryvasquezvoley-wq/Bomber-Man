@@ -334,9 +334,10 @@ public sealed class Form1 : Form
             if (b.Exploding && bombArt != null) { var rect = new Rectangle(xx + 2, yy + 2, tile - 4, tile - 4); g.DrawImage(bombArt, rect); }
             else DrawBomb(g, xx, yy, tile);
         }
-        foreach (var m in monsters) DrawMonster(g, ox + m.X * tile, oy + m.Y * tile, tile);
-        DrawHero(g, ox + px * tile, oy + py * tile, tile);
-        if (heldBomb != null) DrawBomb(g, (int)(ox + px * tile + tile * .23f), (int)(oy + py * tile - tile * .3f), Math.Max(16, tile / 2));
+        foreach (var m in monsters) DrawMonster(g, ox + (m.X + .5f) * tile, oy + (m.Y + .5f) * tile, tile);
+        float heroCenterX = ox + (px + .5f) * tile, heroCenterY = oy + (py + .5f) * tile;
+        DrawHero(g, heroCenterX, heroCenterY, tile);
+        if (heldBomb != null) DrawBomb(g, (int)(heroCenterX + tile * .06f), (int)(heroCenterY - tile * .46f), Math.Max(16, tile / 2));
         if (DateTime.UtcNow < bannerUntil) DrawBanner(g, banner);
         if (paused) DrawOverlay(g, "PAUSA", "Pulsa P para continuar");
         if (gameOver) DrawOverlay(g, "FIN DEL JUEGO", "ENTER / R  Reiniciar       X  Salir");
