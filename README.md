@@ -26,7 +26,7 @@ Pulsa **Esc** para cerrar el juego.
 
 ## Reglas
 
-Los bloques de acero no se pueden cruzar ni destruir. Los ladrillos se dibujan como bloques completos y se destruyen con la explosión, cuyo alcance es de una casilla en cada dirección. El robot también recibe daño de sus propias bombas. Hay tres monstruos por nivel: avanzan casilla por casilla, respetan paredes y bombas, y explotan en un área de una casilla cuando se acercan al personaje. El mapa se amplía en cada nivel; al eliminar los tres monstruos se avanza al siguiente.
+El suelo verde indica las casillas transitables. Los bloques grises de acero no se pueden cruzar ni destruir. Los ladrillos cafés se dibujan como bloques completos; al destruirlos, la casilla pasa a ser césped verde y queda transitable (salvo que revele un potenciador, que también se puede pisar). Las bombas solo se colocan en una casilla verde delante del personaje y su explosión alcanza una casilla en cada dirección. Hay tres monstruos por nivel: avanzan casilla por casilla, respetan los muros y explotan en un área de una casilla al acercarse al personaje.
 
 El guante y el potenciador azul aparecen ocultos bajo ladrillos del primer nivel. El potenciador recupera una carga de bomba.
 
