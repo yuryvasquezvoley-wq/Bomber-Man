@@ -25,8 +25,10 @@ public sealed class Form1 : Form
     private readonly List<Bomb> bombs = [];
     private readonly List<Monster> monsters = [];
     private readonly HashSet<(int x, int y)> flames = [];
+    private readonly HashSet<(int x, int y)> monsterFlames = [];
+    private readonly Dictionary<(int x, int y), DateTime> monsterBlastCenters = [];
     private Cell[,] map = new Cell[0, 0];
-    private Image? hero, bombArt;
+    private Image? hero, bombArt, monsterArt, monsterExplosionArt;
     private Image? floorTile, steelTile, brickTile;
     private int level = 1, lives = 3, bombCharges = 2, cols, rows;
     private float px = 1, py = 1;
@@ -53,6 +55,8 @@ public sealed class Form1 : Form
             var baseDir = AppContext.BaseDirectory;
             hero = Image.FromFile(Path.Combine(baseDir, "Assets", "robot.png"));
             bombArt = Image.FromFile(Path.Combine(baseDir, "Assets", "bomb.jpg"));
+            monsterArt = Image.FromFile(Path.Combine(baseDir, "Assets", "monster.png"));
+            monsterExplosionArt = Image.FromFile(Path.Combine(baseDir, "Assets", "monster-explosion.png"));
             floorTile = Image.FromFile(Path.Combine(baseDir, "Assets", "floor.png"));
             steelTile = Image.FromFile(Path.Combine(baseDir, "Assets", "steel.png"));
             brickTile = Image.FromFile(Path.Combine(baseDir, "Assets", "brick.png"));
@@ -88,7 +92,7 @@ public sealed class Form1 : Form
         int size = 18 + (n - 1) * 2;
         cols = rows = size;
         map = new Cell[rows, cols];
-        bombs.Clear(); monsters.Clear(); flames.Clear();
+        bombs.Clear(); monsters.Clear(); flames.Clear(); monsterFlames.Clear(); monsterBlastCenters.Clear();
         heldBomb = null;
         px = py = 1; bombCharges = 2; chargeAt = DateTime.UtcNow;
         var rng = new Random(215 + n * 89);
@@ -114,8 +118,7 @@ public sealed class Form1 : Form
         for (int x = 1; x < cols - 1; x++) map[rows - 2, x] = Cell.Floor;
         for (int y = 1; y < rows - 1; y++) map[y, cols - 2] = Cell.Floor;
         if (n == 1) PlaceHiddenPowerups(rng);
-        int count = 2 + level * 2;
-        for (int i = 0; i < count; i++)
+        for (int i = 0; i < 3; i++)
         {
             for (int tries = 0; tries < 400; tries++)
             {
@@ -140,7 +143,7 @@ public sealed class Form1 : Form
     {
         if (paused || gameOver || victory) return;
         var now = DateTime.UtcNow;
-        if (now >= flameUntil) flames.Clear();
+        if (now >= flameUntil) { flames.Clear(); monsterFlames.Clear(); monsterBlastCenters.Clear(); }
         if (bombCharges < 2 && (now - chargeAt).TotalSeconds >= 2.5) { bombCharges++; chargeAt = now; }
         float dx = 0, dy = 0;
         if (held.Contains(Keys.A)) dx--; if (held.Contains(Keys.D)) dx++;
@@ -163,9 +166,15 @@ public sealed class Form1 : Form
         for (int i = monsters.Count - 1; i >= 0; i--)
         {
             var m = monsters[i];
+            if (Math.Abs(px - m.X) + Math.Abs(py - m.Y) <= 1f)
+            {
+                ExplodeMonster(m, now);
+                monsters.RemoveAt(i);
+                if (gameOver) return;
+                continue;
+            }
             if (now < m.MoveAt) continue;
             m.X = m.ToX; m.Y = m.ToY;
-            if (Math.Abs(px - m.X) < .48f && Math.Abs(py - m.Y) < .48f) { LoseLife(); if (gameOver) return; }
             var dirs = new[] { (1,0),(-1,0),(0,1),(0,-1) }.OrderBy(_ => Random.Shared.Next()).ToArray();
             foreach (var (ax, ay) in dirs)
             {
@@ -175,7 +184,6 @@ public sealed class Form1 : Form
             float t = 1 - Math.Clamp((float)(m.MoveAt - now).TotalMilliseconds / 340f, 0, 1);
             m.X = m.FromX + (m.ToX - m.FromX) * t; m.Y = m.FromY + (m.ToY - m.FromY) * t;
         }
-        foreach (var m in monsters) if (Math.Abs(px - m.X) < .45f && Math.Abs(py - m.Y) < .45f) { LoseLife(); if (gameOver) return; }
         if (monsters.Count == 0) { if (level < 3) StartLevel(level + 1); else victory = true; }
     }
 
@@ -194,7 +202,9 @@ public sealed class Form1 : Form
     private void PlaceBomb()
     {
         if (bombCharges <= 0) { ShowBanner("Espera para recuperar una bomba"); return; }
-        int x = (int)MathF.Round(px), y = (int)MathF.Round(py);
+        int x = (int)MathF.Round(px) + facingX, y = (int)MathF.Round(py) + facingY;
+        if (!InBounds(x, y) || map[y, x] is Cell.Steel or Cell.Brick or Cell.HiddenGlove or Cell.HiddenPlus or Cell.Glove or Cell.Plus)
+        { ShowBanner("No puedes poner una bomba en ese bloque"); return; }
         if (bombs.Any(b => b.X == x && b.Y == y)) return;
         var bomb = new Bomb(x, y, DateTime.UtcNow); bombs.Add(bomb); bombCharges--;
         if (bombCharges == 1) chargeAt = DateTime.UtcNow;
@@ -244,8 +254,26 @@ public sealed class Form1 : Form
                 }
             }
         foreach (var cell in affected) flames.Add(cell);
-        flameUntil = now.AddMilliseconds(430);
+        if (now.AddMilliseconds(430) > flameUntil) flameUntil = now.AddMilliseconds(430);
         monsters.RemoveAll(m => affected.Any(c => (int)MathF.Round(m.X) == c.x && (int)MathF.Round(m.Y) == c.y));
+        if (affected.Any(c => c.x == (int)MathF.Round(px) && c.y == (int)MathF.Round(py))) LoseLife();
+    }
+
+    private void ExplodeMonster(Monster monster, DateTime now)
+    {
+        int mx = (int)MathF.Round(monster.X), my = (int)MathF.Round(monster.Y);
+        var affected = new List<(int x, int y)> { (mx, my) };
+        foreach (var (dx, dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+        {
+            int x = mx + dx, y = my + dy;
+            if (!InBounds(x, y) || map[y, x] == Cell.Steel) continue;
+            affected.Add((x, y));
+            if (map[y, x] is Cell.Brick or Cell.HiddenGlove or Cell.HiddenPlus)
+                map[y, x] = map[y, x] switch { Cell.HiddenGlove => Cell.Glove, Cell.HiddenPlus => Cell.Plus, _ => Cell.Floor };
+        }
+        foreach (var cell in affected) { flames.Add(cell); monsterFlames.Add(cell); }
+        monsterBlastCenters[(mx, my)] = now.AddMilliseconds(550);
+        if (now.AddMilliseconds(550) > flameUntil) flameUntil = now.AddMilliseconds(550);
         if (affected.Any(c => c.x == (int)MathF.Round(px) && c.y == (int)MathF.Round(py))) LoseLife();
     }
     private void LoseLife()
@@ -265,7 +293,7 @@ public sealed class Form1 : Form
         int tile = Math.Max(16, Math.Min((ClientSize.Width - 80) / cols, (ClientSize.Height - HudHeight - 50) / rows));
         int boardW = tile * cols, boardH = tile * rows;
         int ox = (ClientSize.Width - boardW) / 2, oy = HudHeight + (ClientSize.Height - HudHeight - boardH) / 2;
-        using var floor = new SolidBrush(Color.FromArgb(53, 125, 54));
+        using var floor = new SolidBrush(Color.FromArgb(81, 168, 57));
         using var gridPen = new Pen(Color.FromArgb(35, 16, 41, 22));
         for (int y = 0; y < rows; y++) for (int x = 0; x < cols; x++)
         {
@@ -274,7 +302,10 @@ public sealed class Form1 : Form
             switch (map[y, x])
             {
                 case Cell.Steel: if (steelTile != null) g.DrawImage(steelTile, xx, yy, tile, tile); else DrawSteel(g, xx, yy, tile); break;
-                case Cell.Brick: case Cell.HiddenGlove: case Cell.HiddenPlus: if (brickTile != null) g.DrawImage(brickTile, xx, yy, tile, tile); else DrawBrick(g, xx, yy, tile); break;
+                case Cell.Brick: case Cell.HiddenGlove: case Cell.HiddenPlus:
+                    if (brickTile != null) { g.DrawImage(brickTile, xx, yy, tile, tile); DrawBrickEdges(g, xx, yy, tile); }
+                    else DrawBrick(g, xx, yy, tile);
+                    break;
                 case Cell.Glove: DrawPower(g, xx, yy, tile, "✊", Color.Gold); break;
                 case Cell.Plus: DrawPower(g, xx, yy, tile, "+", Color.Cyan); break;
             }
@@ -282,8 +313,12 @@ public sealed class Form1 : Form
         }
         if (DateTime.UtcNow < flameUntil) foreach (var c in flames)
         {
-            using var flame = new SolidBrush(Color.FromArgb(190, 255, 154, 26)); g.FillRectangle(flame, ox + c.x * tile + 3, oy + c.y * tile + 3, tile - 6, tile - 6);
+            bool greenBlast = monsterFlames.Contains(c);
+            using var flame = new SolidBrush(greenBlast ? Color.FromArgb(205, 104, 255, 63) : Color.FromArgb(190, 255, 154, 26));
+            g.FillRectangle(flame, ox + c.x * tile + 3, oy + c.y * tile + 3, tile - 6, tile - 6);
         }
+        foreach (var blast in monsterBlastCenters.Where(kv => kv.Value > DateTime.UtcNow))
+            if (monsterExplosionArt != null) g.DrawImage(monsterExplosionArt, ox + blast.Key.x * tile, oy + blast.Key.y * tile, tile, tile);
         foreach (var b in bombs)
         {
             int xx = ox + b.X * tile, yy = oy + b.Y * tile;
@@ -308,7 +343,17 @@ public sealed class Form1 : Form
         g.DrawString($"NIVEL  {level} / 3", infoFont, white, 31, 49);
         g.DrawString($"VIDAS  {new string('♥', lives)}", infoFont, new SolidBrush(Color.FromArgb(255, 92, 118)), 195, 49);
         g.DrawString($"BOMBAS  {bombCharges}/2", infoFont, white, 350, 49);
-        g.DrawString(glove ? "GUANTE  EQUIPADO · W A S D + ESPACIO LANZA" : "W A S D  MOVER    ·    ESPACIO  BOMBA    ·    P  PAUSA", infoFont, muted, 535, 49);
+        g.DrawString(glove ? "GUANTE · T RECOGE / LANZA · ESPACIO BOMBA AL FRENTE" : "W A S D MOVER · ESPACIO BOMBA AL FRENTE · P PAUSA", infoFont, muted, 535, 49);
+    }
+    private void DrawBrickEdges(Graphics g, int x, int y, int s)
+    {
+        int edge = Math.Max(2, s / 13);
+        using var topLeft = new SolidBrush(Color.FromArgb(255, 169, 76));
+        using var bottomRight = new SolidBrush(Color.FromArgb(112, 43, 24));
+        g.FillRectangle(topLeft, x + 1, y + 1, s - 2, edge);
+        g.FillRectangle(topLeft, x + 1, y + 1, edge, s - 2);
+        g.FillRectangle(bottomRight, x + 1, y + s - edge - 1, s - 2, edge);
+        g.FillRectangle(bottomRight, x + s - edge - 1, y + 1, edge, s - 2);
     }
     private void DrawSteel(Graphics g, int x, int y, int s)
     {
@@ -318,9 +363,19 @@ public sealed class Form1 : Form
     }
     private void DrawBrick(Graphics g, int x, int y, int s)
     {
-        using var body = new SolidBrush(Color.FromArgb(205, 76, 30)); using var mortar = new Pen(Color.FromArgb(255, 166, 65), Math.Max(1, s / 18f)); using var hi = new Pen(Color.FromArgb(255, 119, 43), Math.Max(1, s / 9f));
-        g.FillRectangle(body, x + 1, y + 1, s - 2, s - 2); g.DrawRectangle(hi, x + 2, y + 2, s - 5, s - 5);
-        g.DrawLine(mortar, x + s / 2, y + 2, x + s / 2, y + s / 2); g.DrawLine(mortar, x + 2, y + s / 2, x + s - 2, y + s / 2); g.DrawLine(mortar, x + s / 4, y + s / 2, x + s / 4, y + s - 2); g.DrawLine(mortar, x + s * .75f, y + s / 2, x + s * .75f, y + s - 2);
+        using var shadow = new SolidBrush(Color.FromArgb(74, 44, 31));
+        using var front = new SolidBrush(Color.FromArgb(196, 69, 28));
+        using var top = new SolidBrush(Color.FromArgb(255, 139, 49));
+        using var side = new SolidBrush(Color.FromArgb(139, 49, 25));
+        using var mortar = new Pen(Color.FromArgb(255, 172, 71), Math.Max(1, s / 18f));
+        int depth = Math.Max(3, s / 8);
+        g.FillRectangle(shadow, x + 1, y + 1, s - 2, s - 2);
+        g.FillPolygon(side, new Point[] { new(x + s - depth, y + depth), new(x + s - 2, y + 2), new(x + s - 2, y + s - 2), new(x + s - depth, y + s - depth) });
+        g.FillPolygon(side, new Point[] { new(x + depth, y + s - depth), new(x + s - depth, y + s - depth), new(x + s - 2, y + s - 2), new(x + 2, y + s - 2) });
+        g.FillRectangle(front, x + depth, y + depth, s - depth * 2, s - depth * 2);
+        g.FillPolygon(top, new Point[] { new(x + 2, y + depth), new(x + depth, y + 2), new(x + s - 2, y + 2), new(x + s - depth, y + depth) });
+        g.DrawLine(mortar, x + s / 2, y + depth, x + s / 2, y + s - depth);
+        g.DrawLine(mortar, x + depth, y + s / 2, x + s - depth, y + s / 2);
     }
     private void DrawPower(Graphics g, int x, int y, int s, string icon, Color color)
     {
@@ -344,6 +399,12 @@ public sealed class Form1 : Form
     }
     private void DrawMonster(Graphics g, float cx, float cy, int s)
     {
+        if (monsterArt != null)
+        {
+            int imageSize = (int)(s * .86f);
+            g.DrawImage(monsterArt, new Rectangle((int)(cx - imageSize / 2f), (int)(cy - imageSize / 2f), imageSize, imageSize));
+            return;
+        }
         int d = (int)(s * .66f); using var body = new SolidBrush(Color.FromArgb(213, 58, 85)); using var eye = new SolidBrush(Color.White); using var pupil = new SolidBrush(Color.FromArgb(31, 31, 44));
         g.FillEllipse(body, cx - d / 2f, cy - d / 2f, d, d); g.FillEllipse(eye, cx - d * .22f, cy - d * .17f, d * .17f, d * .22f); g.FillEllipse(eye, cx + d * .05f, cy - d * .17f, d * .17f, d * .22f); g.FillEllipse(pupil, cx - d * .18f, cy - d * .11f, d * .08f, d * .12f); g.FillEllipse(pupil, cx + d * .09f, cy - d * .11f, d * .08f, d * .12f);
     }

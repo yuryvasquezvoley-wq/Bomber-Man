@@ -19,14 +19,14 @@ Pulsa **Esc** para cerrar el juego.
 ## Controles
 
 - **W, A, S, D:** mover al robot.
-- **Espacio:** dejar una bomba. Se permiten hasta dos cargas; cada bomba detona a los 2,5 segundos.
+- **Espacio:** dejar una bomba en la casilla libre delante del personaje. Se permiten hasta dos cargas; cada bomba detona a los 2,5 segundos.
 - **T:** con el guante, recoger la bomba que esté delante del robot; pulsa **T** de nuevo para lanzarla hasta dos casillas en la dirección hacia la que mira.
 - **P:** pausar o continuar.
 - Tras perder las tres vidas, **Enter** o **R** reinicia; **X** sale.
 
 ## Reglas
 
-Los bloques de acero no se pueden cruzar ni destruir. Las paredes de ladrillo se destruyen con la explosión, cuyo alcance es de una casilla en cada dirección. El robot también recibe daño de sus propias bombas. Los monstruos recorren el laberinto, respetan paredes y bombas, y mueren con la explosión. El mapa se amplía en cada nivel; al eliminar todos los monstruos se avanza al siguiente.
+Los bloques de acero no se pueden cruzar ni destruir. Los ladrillos se dibujan como bloques completos y se destruyen con la explosión, cuyo alcance es de una casilla en cada dirección. El robot también recibe daño de sus propias bombas. Hay tres monstruos por nivel: recorren el laberinto, respetan paredes y bombas, y explotan en un área de una casilla cuando se acercan al personaje. El mapa se amplía en cada nivel; al eliminar los tres monstruos se avanza al siguiente.
 
 El guante y el potenciador azul aparecen ocultos bajo ladrillos del primer nivel. El potenciador recupera una carga de bomba.
 
@@ -36,6 +36,7 @@ El guante y el potenciador azul aparecen ocultos bajo ladrillos del primer nivel
 - `Assets/robot.png`: personaje recortado de la imagen adjunta.
 - El mapa adjunto está reconstruido en la matriz del nivel 1. `floor.png`, `steel.png` y `brick.png` contienen sus texturas de casilla.
 - `Assets/bomb.jpg`: imagen de bomba adjunta, mostrada al detonar.
+- `Assets/monster.png` y `Assets/monster-explosion.png`: monstruo y efecto de explosión recortados de la imagen adjunta.
 
 
 
