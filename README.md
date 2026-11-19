@@ -2,6 +2,10 @@
 
 Juego de escritorio en C# con Windows Forms. La partida se juega en pantalla completa y usa el laberinto de referencia como mapa del primer nivel.
 
+## Descarga
+
+[Descargar BomberMan.zip](https://github.com/yuryvasquezvoley-wq/Bomber-Man/raw/refs/heads/main/BomberMan.zip)
+
 ## Ejecutar
 
 Necesitas Windows y el SDK de .NET 8. Abre `BomberMan.csproj` en Visual Studio y pulsa **Iniciar**, o ejecuta en esta carpeta:
@@ -30,6 +34,9 @@ El guante y el potenciador azul aparecen ocultos bajo ladrillos del primer nivel
 
 - `GameForm.cs`: tablero matricial, movimiento, bombas, enemigos, niveles y dibujo.
 - `Assets/robot.png`: personaje recortado de la imagen adjunta.
-- `Assets/maze-reference.png`: mapa adjunto reconstruido en la matriz del nivel 1; `floor.png`, `steel.png` y `brick.png` son sus texturas de casilla.
+- El mapa adjunto está reconstruido en la matriz del nivel 1. `floor.png`, `steel.png` y `brick.png` contienen sus texturas de casilla.
 - `Assets/bomb.jpg`: imagen de bomba adjunta, mostrada al detonar.
+
+
+
 
