@@ -210,10 +210,11 @@ public sealed class Form1 : Form
 
     private void PlaceBomb()
     {
+        if (playerWalking) { ShowBanner("Espera a quedar dentro de la casilla para poner la bomba"); return; }
         if (bombCharges <= 0) { ShowBanner("Espera para recuperar una bomba"); return; }
-        int x = playerCellX + facingX, y = playerCellY + facingY;
+        int x = playerCellX, y = playerCellY;
         if (!InBounds(x, y) || map[y, x] is Cell.Steel or Cell.Brick or Cell.HiddenGlove or Cell.HiddenPlus or Cell.Glove or Cell.Plus)
-        { ShowBanner("No puedes poner una bomba en ese bloque"); return; }
+        { ShowBanner("No puedes poner una bomba fuera del césped"); return; }
         if (bombs.Any(b => b.X == x && b.Y == y)) return;
         var bomb = new Bomb(x, y, DateTime.UtcNow); bombs.Add(bomb); bombCharges--;
         if (bombCharges == 1) chargeAt = DateTime.UtcNow;

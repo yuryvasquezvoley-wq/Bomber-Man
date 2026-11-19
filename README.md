@@ -19,7 +19,7 @@ Pulsa **Esc** para cerrar el juego.
 ## Controles
 
 - **W, A, S, D:** avanzar una casilla por vez. El personaje solo entra a una casilla libre de la matriz y gira hacia la última dirección válida.
-- **Espacio:** dejar una bomba en la casilla libre delante del personaje. Se permiten hasta dos cargas; cada bomba detona a los 2,5 segundos.
+- **Espacio:** dejar una bomba debajo del personaje. Puede salir de esa casilla, pero la bomba le impide regresar hasta explotar. Se permiten hasta dos cargas; cada bomba detona a los 2,5 segundos.
 - **T:** con el guante, recoger la bomba que esté delante del robot; pulsa **T** de nuevo para lanzarla hasta dos casillas en la dirección hacia la que mira.
 - **P:** pausar o continuar.
 - Tras perder las tres vidas, **Enter** o **R** reinicia; **X** sale.
